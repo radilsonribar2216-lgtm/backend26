@@ -1,0 +1,355 @@
+### =====================================================================
+### Pruebas de la API - Clinica veterinaria
+### Abrir en IntelliJ y pulsar el triangulo verde de cada peticion.
+### Requiere: backend corriendo en 8080 y clinica.sql cargado.
+### Las fechas de ejemplo son de finales de 2026: si ya pasaron, cambielas.
+### =====================================================================
+
+@base = http://localhost:8080/clinica/v1
+
+### ---------------------------- CATALOGOS ------------------------------
+### Clientes
+GET {{base}}/clientes
+
+### Mascotas del cliente 1 (combo dependiente)
+GET {{base}}/clientes/1/mascotas
+
+### Cliente inexistente -> 404
+GET {{base}}/clientes/999/mascotas
+
+### Veterinarios
+GET {{base}}/veterinarios
+
+### ------------------------------ CITAS --------------------------------
+### Listado por defecto (fecha/hora descendente, 10 por pagina)
+GET {{base}}/citas
+
+### Filtros + orden + paginacion
+GET {{base}}/citas?estado=PENDIENTE&texto=luna&sortBy=veterinario&sortDir=asc&page=0&size=5
+
+### Filtro por rango de fechas
+GET {{base}}/citas?fechaDesde=2026-10-01&fechaHasta=2026-10-31
+
+### Detalle de una cita
+GET {{base}}/citas/3
+
+### Crear cita OK -> 201
+POST {{base}}/citas
+Content-Type: application/json
+
+{
+  "clienteId": 1,
+  "mascotaId": 1,
+  "veterinarioId": 2,
+  "fecha": "2026-12-01",
+  "hora": "09:00",
+  "motivo": "Vacunacion de refuerzo"
+}
+
+### Choque de horario del veterinario (09:10 vs 09:00) -> 409
+POST {{base}}/citas
+Content-Type: application/json
+
+{
+  "clienteId": 2,
+  "mascotaId": 3,
+  "veterinarioId": 2,
+  "fecha": "2026-12-01",
+  "hora": "09:10",
+  "motivo": "Control"
+}
+
+### Mascota que no es del cliente (cliente 1, mascota 3) -> 400
+POST {{base}}/citas
+Content-Type: application/json
+
+{
+  "clienteId": 1,
+  "mascotaId": 3,
+  "veterinarioId": 1,
+  "fecha": "2026-12-02",
+  "hora": "10:00",
+  "motivo": "Control"
+}
+
+### Fecha pasada -> 400
+POST {{base}}/citas
+Content-Type: application/json
+
+{
+  "clienteId": 1,
+  "mascotaId": 1,
+  "veterinarioId": 1,
+  "fecha": "2020-01-01",
+  "hora": "10:00",
+  "motivo": "Control"
+}
+
+### Cliente inexistente -> 404
+POST {{base}}/citas
+Content-Type: application/json
+
+{
+  "clienteId": 999,
+  "mascotaId": 1,
+  "veterinarioId": 1,
+  "fecha": "2026-12-03",
+  "hora": "10:00",
+  "motivo": "Control"
+}
+
+### Campos obligatorios vacios -> 400 con detalle por campo
+POST {{base}}/citas
+Content-Type: application/json
+
+{}
+
+### Editar cita pendiente (cambia fecha, hora y veterinario) -> 200
+PUT {{base}}/citas/3
+Content-Type: application/json
+
+{
+  "veterinarioId": 3,
+  "fecha": "2026-12-05",
+  "hora": "14:30",
+  "motivo": "Vacunacion anual"
+}
+
+### Editar cita ATENDIDA -> 409 (informacion historica protegida)
+PUT {{base}}/citas/1
+Content-Type: application/json
+
+{
+  "veterinarioId": 1,
+  "fecha": "2026-12-05",
+  "hora": "08:00",
+  "motivo": "Intento de cambio"
+}
+
+### Cancelar la cita 5
+PATCH {{base}}/citas/5/estado
+Content-Type: application/json
+
+{ "estado": "CANCELADA" }
+
+### Editar cita cancelada -> 409
+PUT {{base}}/citas/5
+Content-Type: application/json
+
+{
+  "veterinarioId": 1,
+  "fecha": "2026-12-06",
+  "hora": "08:00",
+  "motivo": "Intento de cambio"
+}
+
+### Cambiar estado de una cancelada sin "reactivar" -> 409
+PATCH {{base}}/citas/5/estado
+Content-Type: application/json
+
+{ "estado": "CONFIRMADA" }
+
+### Reactivar (operacion explicita) -> 200, queda PENDIENTE
+PATCH {{base}}/citas/5/reactivar
+
+### Cita inexistente -> 404
+GET {{base}}/citas/9999
+
+### ------------------------ HISTORIAS CLINICAS --------------------------
+### Listado por defecto (fecha/hora descendente)
+GET {{base}}/historias-clinicas
+
+### Filtros
+GET {{base}}/historias-clinicas?texto=otitis&sortBy=mascota&sortDir=asc
+
+### Detalle
+GET {{base}}/historias-clinicas/1
+
+### Crear historia desde la cita 4 (cliente 3, mascota 4) -> 201 y la cita pasa a ATENDIDA
+POST {{base}}/historias-clinicas
+Content-Type: application/json
+
+{
+  "clienteId": 3,
+  "mascotaId": 4,
+  "citaId": 4,
+  "veterinarioId": 3,
+  "fechaHora": "2026-10-21T15:00",
+  "motivoConsulta": "Revision de piel",
+  "diagnostico": "Dermatitis alergica leve",
+  "observaciones": "Evitar cambio de alimento"
+}
+
+### Repetir la misma historia -> 409 (la cita ya tiene historia)
+POST {{base}}/historias-clinicas
+Content-Type: application/json
+
+{
+  "clienteId": 3,
+  "mascotaId": 4,
+  "citaId": 4,
+  "veterinarioId": 3,
+  "fechaHora": "2026-10-21T15:00",
+  "motivoConsulta": "Revision de piel",
+  "diagnostico": "Duplicada"
+}
+
+### Cita de otra mascota -> 400
+POST {{base}}/historias-clinicas
+Content-Type: application/json
+
+{
+  "clienteId": 1,
+  "mascotaId": 2,
+  "citaId": 1,
+  "veterinarioId": 1,
+  "fechaHora": "2026-10-21T15:00",
+  "motivoConsulta": "Control",
+  "diagnostico": "Prueba"
+}
+
+### -------------------------- ANOTACIONES -------------------------------
+### Historico de la mascota (mas recientes primero, paginado)
+GET {{base}}/historias-clinicas/1/anotaciones?page=0&size=5
+
+### Solo las anotaciones de esta historia, con filtro de texto
+GET {{base}}/historias-clinicas/1/anotaciones?soloHistoria=true&texto=oido
+
+### Detalle de una anotacion
+GET {{base}}/historias-clinicas/1/anotaciones/1
+
+### Agregar anotacion -> 201
+POST {{base}}/historias-clinicas/1/anotaciones
+Content-Type: application/json
+
+{
+  "veterinarioId": 1,
+  "descripcion": "Control de seguimiento",
+  "observacion": "Sin molestias",
+  "diagnosticoEvolucion": "Recuperacion completa"
+}
+
+### Historia inexistente -> 404
+POST {{base}}/historias-clinicas/9999/anotaciones
+Content-Type: application/json
+
+{
+  "veterinarioId": 1,
+  "descripcion": "x",
+  "diagnosticoEvolucion": "x"
+}
+
+### ------------------------------ FORMULAS -----------------------------
+### Listado por defecto (fecha de creacion descendente) - informacion resumida
+GET {{base}}/formulas
+
+### Filtros y orden
+GET {{base}}/formulas?activo=true&texto=meloxicam&sortBy=medicamento&sortDir=asc
+
+### Detalle completo
+GET {{base}}/formulas/1
+
+### Crear formula OK -> 201
+POST {{base}}/formulas
+Content-Type: application/json
+
+{
+  "mascotaId": 1,
+  "historiaClinicaId": 1,
+  "veterinarioId": 1,
+  "fechaEmision": "2026-10-15T12:00",
+  "medicamento": "Amoxicilina",
+  "dosisCantidad": 250,
+  "dosisUnidad": "mg",
+  "frecuencia": "Cada 12 horas",
+  "duracionDias": 7,
+  "indicaciones": "Administrar con comida"
+}
+
+### Historia de OTRA mascota (mascota 2, historia 1) -> 400
+POST {{base}}/formulas
+Content-Type: application/json
+
+{
+  "mascotaId": 2,
+  "historiaClinicaId": 1,
+  "veterinarioId": 1,
+  "fechaEmision": "2026-10-15T12:00",
+  "medicamento": "Amoxicilina",
+  "dosisCantidad": 250,
+  "dosisUnidad": "mg",
+  "frecuencia": "Cada 12 horas",
+  "duracionDias": 7,
+  "indicaciones": "x"
+}
+
+### Emision anterior a la consulta -> 400
+POST {{base}}/formulas
+Content-Type: application/json
+
+{
+  "mascotaId": 1,
+  "historiaClinicaId": 1,
+  "veterinarioId": 1,
+  "fechaEmision": "2026-01-01T08:00",
+  "medicamento": "Amoxicilina",
+  "dosisCantidad": 250,
+  "dosisUnidad": "mg",
+  "frecuencia": "Cada 12 horas",
+  "duracionDias": 7,
+  "indicaciones": "x"
+}
+
+### Dosis y duracion invalidas -> 400 con detalle por campo
+POST {{base}}/formulas
+Content-Type: application/json
+
+{
+  "mascotaId": 1,
+  "historiaClinicaId": 1,
+  "veterinarioId": 1,
+  "fechaEmision": "2026-10-15T12:00",
+  "medicamento": "Amoxicilina",
+  "dosisCantidad": 0,
+  "dosisUnidad": "mg",
+  "frecuencia": "Cada 12 horas",
+  "duracionDias": -3,
+  "indicaciones": "x"
+}
+
+### Editar formula activa -> 200
+PUT {{base}}/formulas/1
+Content-Type: application/json
+
+{
+  "fechaEmision": "2026-10-15T12:00",
+  "medicamento": "Gotas oticas con gentamicina",
+  "dosisCantidad": 5,
+  "dosisUnidad": "gotas",
+  "frecuencia": "Cada 12 horas",
+  "duracionDias": 10,
+  "indicaciones": "Aplicar en el oido izquierdo"
+}
+
+### Inactivar (no existe DELETE) -> 200
+PATCH {{base}}/formulas/2/inactivar
+
+### Editar una formula inactiva -> 409
+PUT {{base}}/formulas/2
+Content-Type: application/json
+
+{
+  "fechaEmision": "2026-10-15T12:00",
+  "medicamento": "Meloxicam",
+  "dosisCantidad": 1,
+  "dosisUnidad": "mg/kg",
+  "frecuencia": "Cada 24 horas",
+  "duracionDias": 5,
+  "indicaciones": "x"
+}
+
+### Reactivar la formula
+PATCH {{base}}/formulas/2/activar
+
+### Formula inexistente -> 404
+GET {{base}}/formulas/9999
