@@ -49,7 +49,7 @@ public class AuthApiController {
         String password = required(body,"password");
         List<Map<String,Object>> rows = jdbc.queryForList(
                 "SELECT id,nombre,email,password_hash,rol,activo FROM usuario WHERE email=?",email);
-        if (rows.isEmpty() || !Boolean.TRUE.equals(((Number)rows.get(0).get("activo")).intValue()==1))
+        if (rows.isEmpty() || ((Number)rows.get(0).get("activo")).intValue()!=1)
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"Credenciales incorrectas.");
         Map<String,Object> user = rows.get(0);
         if (!encoder.matches(password,String.valueOf(user.get("password_hash"))))
