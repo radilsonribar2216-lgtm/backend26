@@ -1,4 +1,4 @@
--- Seguridad de acceso y soporte para consumo de inventario desde facturas.
+-- Ejecutar despues de clinica_integral.sql. Se puede ejecutar varias veces en MySQL 8.
 USE clinica;
 
 CREATE TABLE IF NOT EXISTS sesion_usuario (
@@ -14,6 +14,31 @@ CREATE TABLE IF NOT EXISTS sesion_usuario (
     CONSTRAINT fk_sesion_usuario FOREIGN KEY (usuario_id) REFERENCES usuario(id)
 ) ENGINE=InnoDB;
 
-ALTER TABLE factura_detalle
-    ADD COLUMN IF NOT EXISTS lote_id BIGINT NULL,
-    ADD CONSTRAINT fk_detalle_lote FOREIGN KEY (lote_id) REFERENCES lote_producto(id);
+DROP PROCEDURE IF EXISTS clinica_agregar_lote_factura;
+DELIMITER //
+CREATE PROCEDURE clinica_agregar_lote_factura()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'factura_detalle'
+          AND COLUMN_NAME = 'lote_id'
+    ) THEN
+        ALTER TABLE factura_detalle ADD COLUMN lote_id BIGINT NULL;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.TABLE_CONSTRAINTS
+        WHERE CONSTRAINT_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'factura_detalle'
+          AND CONSTRAINT_NAME = 'fk_detalle_lote'
+    ) THEN
+        ALTER TABLE factura_detalle
+            ADD CONSTRAINT fk_detalle_lote
+            FOREIGN KEY (lote_id) REFERENCES lote_producto(id);
+    END IF;
+END//
+DELIMITER ;
+
+CALL clinica_agregar_lote_factura();
+DROP PROCEDURE clinica_agregar_lote_factura;
