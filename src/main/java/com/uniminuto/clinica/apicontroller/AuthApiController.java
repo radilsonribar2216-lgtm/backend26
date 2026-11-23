@@ -49,7 +49,7 @@ public class AuthApiController {
         String password = required(body,"password");
         List<Map<String,Object>> rows = jdbc.queryForList(
                 "SELECT id,nombre,email,password_hash,rol,activo FROM usuario WHERE email=?",email);
-        if (rows.isEmpty() || ((Number)rows.get(0).get("activo")).intValue()!=1)
+        if (rows.isEmpty() || !isActive(rows.get(0).get("activo")))
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"Credenciales incorrectas.");
         Map<String,Object> user = rows.get(0);
         if (!encoder.matches(password,String.valueOf(user.get("password_hash"))))
@@ -112,7 +112,7 @@ public class AuthApiController {
         return rows.get(0);
     }
 
-    private String token(String header) {
+    private boolean isActive(Object value) {\n        if (value instanceof Boolean b) return b;\n        if (value instanceof Number n) return n.intValue() == 1;\n        return "1".equals(String.valueOf(value)) || "true".equalsIgnoreCase(String.valueOf(value));\n    }\n\n    private String token(String header) {
         if(header==null || !header.startsWith("Bearer "))
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"Falta el token Bearer.");
         return header.substring(7).trim();
