@@ -156,7 +156,7 @@ public class FacturacionApiController {
             SELECT COUNT(*) AS cantidadFacturas,
                    COALESCE(SUM(total),0) AS totalFacturado,
                    COALESCE(SUM(CASE WHEN estado='PAGADA' THEN total ELSE 0 END),0) AS totalPagado,
-                   COALESCE(SUM(CASE WHEN estado IN ('EMITIDA','PREFActura') THEN total ELSE 0 END),0) AS saldoPorCobrar
+                   COALESCE(SUM(CASE WHEN estado IN ('EMITIDA','PREFactura') THEN total ELSE 0 END),0) AS saldoPorCobrar
             FROM factura
             WHERE DATE(fecha_emision) BETWEEN ? AND ? AND estado <> 'ANULADA'
             """, desde, hasta);
