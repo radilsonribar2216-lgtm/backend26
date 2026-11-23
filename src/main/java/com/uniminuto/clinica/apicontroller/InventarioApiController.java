@@ -127,7 +127,7 @@ public class InventarioApiController {
     @Transactional
     public Map<String, Object> movimiento(@RequestBody Map<String, Object> body) {
         long productoId = Long.parseLong(requerido(body, "productoId"));
-        Long loteId = body.get("loteId") == null ? null : Long.valueOf(body.get("loteId").toString());
+        long loteId = Long.parseLong(requerido(body, "loteId"));
         String tipo = requerido(body, "tipo").toUpperCase();
         int cantidad = entero(body, "cantidad", 0);
         String motivo = requerido(body, "motivo");
@@ -141,7 +141,7 @@ public class InventarioApiController {
         if ("SALIDA".equals(tipo) && stock < cantidad)
             throw new IllegalArgumentException("No hay existencias suficientes.");
 
-        if (loteId != null) {
+        {
             Integer disponible = jdbc.queryForObject(
                 "SELECT cantidad_disponible FROM lote_producto WHERE id=? AND producto_id=? FOR UPDATE",
                 Integer.class, loteId, productoId);
