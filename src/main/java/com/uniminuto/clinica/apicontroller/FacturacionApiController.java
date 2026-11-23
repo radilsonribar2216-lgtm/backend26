@@ -99,11 +99,47 @@ public class FacturacionApiController {
     @PostMapping("/facturas/{id}/emitir")
     @Transactional
     public Map<String, Object> emitir(@PathVariable long id) {
-        int actualizadas = jdbc.update("""
-            UPDATE factura SET estado='EMITIDA'
-            WHERE id=? AND estado='PREFactura'
-            """, id);
-        if (actualizadas == 0) throw new IllegalArgumentException("Solo se pueden emitir prefacturas vigentes.");
+        Map<String,Object> factura = jdbc.queryForMap(
+            "SELECT estado FROM factura WHERE id=? FOR UPDATE", id);
+        if (!"PREFactura".equals(factura.get("estado")))
+            throw new IllegalArgumentException("Solo se pueden emitir prefacturas vigentes.");
+
+        List<Map<String,Object>> lineas = jdbc.queryForList(
+            "SELECT producto_id,cantidad,concepto FROM factura_detalle WHERE factura_id=? AND producto_id IS NOT NULL", id);
+        for (Map<String,Object> linea : lineas) {
+            BigDecimal cantidadDecimal = new BigDecimal(linea.get("cantidad").toString());
+            if (cantidadDecimal.stripTrailingZeros().scale() > 0)
+                throw new IllegalArgumentException("Los productos de inventario deben venderse en unidades enteras.");
+            int restante = cantidadDecimal.intValueExact();
+            long productoId = ((Number)linea.get("producto_id")).longValue();
+            Integer stock = jdbc.queryForObject(
+                "SELECT existencia FROM producto WHERE id=? AND activo=1 FOR UPDATE", Integer.class, productoId);
+            if (stock == null || stock < restante)
+                throw new IllegalArgumentException("Existencias insuficientes para " + linea.get("concepto"));
+
+            List<Map<String,Object>> lotes = jdbc.queryForList("""
+                SELECT id,cantidad_disponible FROM lote_producto
+                WHERE producto_id=? AND cantidad_disponible>0
+                  AND (fecha_vencimiento IS NULL OR fecha_vencimiento>=CURRENT_DATE)
+                ORDER BY fecha_vencimiento IS NULL,fecha_vencimiento,id FOR UPDATE
+                """, productoId);
+            for (Map<String,Object> lote : lotes) {
+                if (restante == 0) break;
+                int disponible = ((Number)lote.get("cantidad_disponible")).intValue();
+                int tomar = Math.min(disponible, restante);
+                long loteId = ((Number)lote.get("id")).longValue();
+                jdbc.update("UPDATE lote_producto SET cantidad_disponible=cantidad_disponible-? WHERE id=?", tomar, loteId);
+                jdbc.update("""
+                    INSERT INTO movimiento_inventario(producto_id,lote_id,tipo,cantidad,motivo,referencia)
+                    VALUES(?,?,'SALIDA',?,'Venta de factura',?)
+                    """, productoId, loteId, tomar, String.valueOf(id));
+                restante -= tomar;
+            }
+            if (restante > 0)
+                throw new IllegalArgumentException("No hay lotes vigentes suficientes para " + linea.get("concepto"));
+            jdbc.update("UPDATE producto SET existencia=existencia-? WHERE id=?", cantidadDecimal.intValueExact(), productoId);
+        }
+        jdbc.update("UPDATE factura SET estado='EMITIDA' WHERE id=?", id);
         return detalle(id);
     }
 
