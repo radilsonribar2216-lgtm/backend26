@@ -17,6 +17,7 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request,HttpServletResponse response,Object handler) throws Exception {
+        if (HttpMethod.OPTIONS.matches(request.getMethod())) return true;
         String path=request.getRequestURI().substring(request.getContextPath().length());
         if (path.equals("/auth/login") || path.equals("/auth/bootstrap")) return true;
         String header=request.getHeader("Authorization");
